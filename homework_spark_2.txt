@@ -14,46 +14,47 @@ from pyspark.sql.window import Window
 
 #1
 
-df_15_countries=df.filter(F.col("date")=="2021-03-31").filter(F.col("population").isNotNull() & F.col("total_cases").isNotNull()).withColumn("percent_infected", (F.col("total_cases")/F.col("population"))*100).select("iso_code", "location", "percent_infected").orderBy(F.col("percent_infected").desc()).limit(15).show()
+df_15_countries=df.filter(F.col("date") == "2021-03-31").filter(F.col("population").isNotNull() & F.col("total_cases").isNotNull()).withColumn("percent_infected", F.round((F.col("total_cases")/F.col("population"))*100, 2)).select("iso_code", "location", "percent_infected").orderBy(F.col("percent_infected").desc()).limit(15).show()
 
-+--------+-------------+------------------+                                     
-|iso_code|     location|  percent_infected|
-+--------+-------------+------------------+
-|     AND|      Andorra|15.543907331909661|
-|     MNE|   Montenegro|14.523725364693293|
-|     CZE|      Czechia|14.308848404077997|
-|     SMR|   San Marino|13.937179562732041|
-|     SVN|     Slovenia|10.370805779121204|
-|     LUX|   Luxembourg| 9.847342390123583|
-|     ISR|       Israel| 9.625106044786802|
-|     USA|United States| 9.203010995860707|
-|     SRB|       Serbia| 8.826328557933492|
-|     BHR|      Bahrain| 8.488860079114566|
-|     PAN|       Panama| 8.228739065460761|
-|     PRT|     Portugal| 8.058699735120369|
-|     EST|      Estonia| 8.022681579659551|
-|     SWE|       Sweden| 7.969744347858805|
-|     LTU|    Lithuania| 7.938864728274825|
-+--------+-------------+------------------+
++--------+-------------+----------------+
+|iso_code|     location|percent_infected|
++--------+-------------+----------------+
+|     AND|      Andorra|           15.54|
+|     MNE|   Montenegro|           14.52|
+|     CZE|      Czechia|           14.31|
+|     SMR|   San Marino|           13.94|
+|     SVN|     Slovenia|           10.37|
+|     LUX|   Luxembourg|            9.85|
+|     ISR|       Israel|            9.63|
+|     USA|United States|             9.2|
+|     SRB|       Serbia|            8.83|
+|     BHR|      Bahrain|            8.49|
+|     PAN|       Panama|            8.23|
+|     PRT|     Portugal|            8.06|
+|     EST|      Estonia|            8.02|
+|     SWE|       Sweden|            7.97|
+|     LTU|    Lithuania|            7.94|
++--------+-------------+----------------+
 
 #2
 
-df_top10_new_cases=df.filter((F.col("date")>="2021-03-25") & (F.col("date")<="2021-03-31")).groupBy("location").agg(F.max("new_cases").alias("max_new_cases"), F.first("iso_code").alias("iso_code")).select("iso_code", "location", "max_new_cases").orderBy(F.col("max_new_cases").desc()).limit(10).show()
+window_spec=Window.partitionBy("location").orderBy(F.col("new_cases").desc())
+df_top10_new_cases=df.filter(~F.col("iso_code").startswith("OWID")).filter((F.col("date")>="2021-03-25") & (F.col("date")<="2021-03-31")).withColumn("rank", F.row_number().over(window_spec)).filter(F.col("rank")==1).select(F.col("iso_code"), F.col("location"), F.col("new_cases").alias("max_new_cases"), F.col("date")).orderBy(F.col("max_new_cases").desc()).limit(10).show()
 
-+--------+--------------+-------------+                                         
-|iso_code|      location|max_new_cases|
-+--------+--------------+-------------+
-|OWID_WRL|         World|     683205.0|
-|OWID_EUR|        Europe|     255985.0|
-|OWID_EUN|European Union|     216452.0|
-|OWID_ASI|          Asia|     183350.0|
-|OWID_SAM| South America|     148476.0|
-|     BRA|        Brazil|     100158.0|
-|OWID_NAM| North America|      93350.0|
-|     USA| United States|      77321.0|
-|     IND|         India|      72330.0|
-|     FRA|        France|      59054.0|
-+--------+--------------+-------------+
++--------+-------------+-------------+----------+
+|iso_code|     location|max_new_cases|      date|
++--------+-------------+-------------+----------+
+|     BRA|       Brazil|     100158.0|2021-03-25|
+|     USA|United States|      77321.0|2021-03-26|
+|     IND|        India|      72330.0|2021-03-31|
+|     FRA|       France|      59054.0|2021-03-31|
+|     TUR|       Turkey|      39302.0|2021-03-31|
+|     POL|       Poland|      35145.0|2021-03-26|
+|     DEU|      Germany|      25014.0|2021-03-31|
+|     ITA|        Italy|      24076.0|2021-03-26|
+|     PER|         Peru|      19206.0|2021-03-25|
+|     UKR|      Ukraine|      18226.0|2021-03-26|
++--------+-------------+-------------+----------+
 
 #3
 
@@ -61,12 +62,12 @@ df_russia=df.filter((F.col("location")=="Russia") & (F.col("date")>="2021-03-25"
 
 window_spec=Window.partitionBy("location").orderBy("date")
 
-df_russia_cases_change=df_russia.withColumn("previous_day_cases", F.lag("new_cases").over(window_spec)).withColumn("delta", F.col("new_cases")-F.col("previous_day_cases")).select("date", "previous_day_cases", "new_cases", "delta").orderBy("date").show()
+df_russia_cases_change=df_russia.withColumn("previous_day_cases", F.lag("new_cases").over(window_spec)).withColumn("delta", F.when(F.col("previous_day_cases").isNull(), 0).otherwise(F.col("new_cases")-F.col("previous_day_cases"))).select("date", "previous_day_cases", "new_cases", "delta").orderBy("date").show()
 
 +----------+------------------+---------+------+
 |      date|previous_day_cases|new_cases| delta|
 +----------+------------------+---------+------+
-|2021-03-25|              NULL|   9128.0|  NULL|
+|2021-03-25|              NULL|   9128.0|   0.0|
 |2021-03-26|            9128.0|   9073.0| -55.0|
 |2021-03-27|            9073.0|   8783.0|-290.0|
 |2021-03-28|            8783.0|   8979.0| 196.0|
