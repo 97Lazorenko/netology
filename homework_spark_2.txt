@@ -58,16 +58,16 @@ df_top10_new_cases=df.filter(~F.col("iso_code").startswith("OWID")).filter((F.co
 
 #3
 
-df_russia=df.filter((F.col("location")=="Russia") & (F.col("date")>="2021-03-25") & (F.col("date")<="2021-03-31"))
+df_russia=df.filter((F.col("location")=="Russia") & (F.col("date")>="2021-03-24") & (F.col("date")<="2021-03-31"))
 
 window_spec=Window.partitionBy("location").orderBy("date")
 
-df_russia_cases_change=df_russia.withColumn("previous_day_cases", F.lag("new_cases").over(window_spec)).withColumn("delta", F.when(F.col("previous_day_cases").isNull(), 0).otherwise(F.col("new_cases")-F.col("previous_day_cases"))).select("date", "previous_day_cases", "new_cases", "delta").orderBy("date").show()
+df_russia_cases_change=df_russia.withColumn("previous_day_cases", F.lag("new_cases").over(window_spec)).withColumn("delta", F.col("new_cases")-F.col("previous_day_cases")).filter(F.col("date")>="2021-03-25").select("date", "previous_day_cases", "new_cases", "delta").orderBy("date").show()
 
 +----------+------------------+---------+------+
 |      date|previous_day_cases|new_cases| delta|
 +----------+------------------+---------+------+
-|2021-03-25|              NULL|   9128.0|   0.0|
+|2021-03-25|            8769.0|   9128.0| 359.0|
 |2021-03-26|            9128.0|   9073.0| -55.0|
 |2021-03-27|            9073.0|   8783.0|-290.0|
 |2021-03-28|            8783.0|   8979.0| 196.0|
